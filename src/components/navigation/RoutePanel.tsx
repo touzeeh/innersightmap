@@ -6,6 +6,7 @@ import { tr } from '../../i18n/strings';
 import { floorLabel, startLabel } from '../../services/destinationSearch';
 import { formatEstimate } from '../../services/routePlanner';
 import type { Destination, Instruction, Language, NavStatus, PickMode, PlanResult, TravelPreference } from '../../types/navigation';
+import { AnimatedSelect, type SelectGroup } from '../common/AnimatedSelect';
 
 export interface RoutePanelProps {
   language: Language;
@@ -90,12 +91,23 @@ export function RoutePanel({
   const destinationsByFloor = [0, 1, 2, 3].flatMap((level) => {
     const onFloor = DESTINATIONS.filter((item) => item.level === level);
     const wingNames = [...new Set(onFloor.map((item) => wingName(item.id)))];
-    return wingNames.map((wing) => ({ level, wing, items: onFloor.filter((item) => wingName(item.id) === wing) }));
+    return wingNames.map((wing) => ({
+      level, wing,
+      items: onFloor.filter((item) => wingName(item.id) === wing).map((item) => ({
+        value: item.id,
+        label: `${item.roomNumber ? `${item.roomNumber} · ` : ''}${language === 'hi' ? item.nameHi : item.name}`,
+        detail: `${floorLabel(level as 0 | 1 | 2 | 3, language)} · ${wing}`,
+      })),
+    }));
   });
   if (selectedRoomId && !START_POINTS.some((s) => s.id === selectedRoomId)) {
     startOptions.push({ id: selectedRoomId, label: startLabel(selectedRoomId, language) });
   }
   const route = plan?.ok ? plan.route : null;
+  const destinationGroups: SelectGroup[] = destinationsByFloor.map(({ level, wing, items }) => ({
+    label: `${floorLabel(level as 0 | 1 | 2 | 3, language)} · ${wing}`,
+    options: items,
+  }));
   const navigating = navStatus === 'navigating' || navStatus === 'paused';
   const activeStepRef = useRef<HTMLLIElement | null>(null);
   const showDevControls = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dev') === '1';
@@ -118,11 +130,16 @@ export function RoutePanel({
         <div className="route-input-row">
           <span className="route-dot start-dot" aria-hidden="true" />
           <label className="visually-hidden" htmlFor="start-select">{tr('startHeading', language)}</label>
-          <select id="start-select" value={startId} onChange={(e) => onStartChange(e.target.value)} disabled={navigating}>
-            {startOptions.map((o) => (
-              <option key={o.id} value={o.id}>{o.label}</option>
-            ))}
-          </select>
+          <AnimatedSelect
+            id="start-select"
+            className="route-start-select"
+            value={startId}
+            options={startOptions.map((option) => ({ value: option.id, label: option.label }))}
+            searchPlaceholder={language === 'hi' ? 'शुरुआत खोजें…' : 'Search starting point…'}
+            emptyLabel={tr('noResults', language)}
+            disabled={navigating}
+            onChange={onStartChange}
+          />
           <button
             type="button"
             className={`icon-button map-pick${pickMode === 'start' ? ' is-on' : ''}`}
@@ -138,14 +155,17 @@ export function RoutePanel({
         <div className="route-input-row destination-input-row">
           <span className="route-dot destination-dot" aria-hidden="true" />
         <label className="visually-hidden" htmlFor="destination-select">{tr('searchHeading', language)}</label>
-        <select id="destination-select" className="destination-select" value={destination?.id ?? ''} onChange={(event) => onDestinationChange(event.target.value)} disabled={navigating}>
-          <option value="">{tr('chooseDestination', language)}</option>
-          {destinationsByFloor.map(({ level, wing, items }) => (
-            <optgroup key={`${level}-${wing}`} label={`${floorLabel(level as 0 | 1 | 2 | 3, language)} · ${wing}`}>
-              {items.map((item) => <option key={item.id} value={item.id}>{item.roomNumber ? `${item.roomNumber} · ` : ''}{language === 'hi' ? item.nameHi : item.name}</option>)}
-            </optgroup>
-          ))}
-        </select>
+        <AnimatedSelect
+          id="destination-select"
+          className="destination-select"
+          value={destination?.id ?? ''}
+          groups={destinationGroups}
+          placeholder={destination ? `${destination.roomNumber ? `${destination.roomNumber} · ` : ''}${language === 'hi' ? destination.nameHi : destination.name}` : tr('chooseDestination', language)}
+          searchPlaceholder={language === 'hi' ? 'कमरा या विभाग खोजें…' : 'Search room or department…'}
+          emptyLabel={tr('noResults', language)}
+          disabled={navigating}
+          onChange={onDestinationChange}
+        />
         {destination ? <button type="button" className="icon-button destination-clear" onClick={onClearDestination} aria-label={tr('clearDestination', language)} disabled={navigating}><X size={16} aria-hidden="true" /></button> : null}
         <button
           type="button"

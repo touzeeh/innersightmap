@@ -4131,3 +4131,131 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .nav-controller-bar *, .nav-controller-bar *::before, .nav-controller-bar *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Unified route dropdowns: searchable, keyboard friendly and independent of
+   the browser's native popup so menus animate and stay clear of panel clipping. */
+.route-input-row > .animated-select {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+}
+.route-input-row > .animated-select.destination-select { grid-column: 2; }
+.animated-select-trigger {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.animated-select-trigger:hover:not(:disabled), .animated-select.is-open .animated-select-trigger { background: #f1f5f9; color: #0f766e; }
+.animated-select-trigger:focus-visible { outline: 2px solid #0d9488; outline-offset: 1px; }
+.animated-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.animated-select-value.is-placeholder { color: #64748b; }
+.animated-select-chevron { flex: 0 0 auto; color: #64748b; transition: transform 180ms cubic-bezier(.2,.8,.2,1), color 180ms ease; }
+.animated-select.is-open .animated-select-chevron { transform: rotate(180deg); color: #0f766e; }
+.animated-select.is-disabled { opacity: .6; }
+.animated-select-trigger:disabled { cursor: not-allowed; }
+.animated-select-menu {
+  z-index: 2000;
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dbe4e8;
+  border-radius: 13px;
+  background: rgba(255,255,255,.98);
+  color: #0f172a;
+  box-shadow: 0 16px 40px rgba(15,23,42,.2), 0 3px 9px rgba(15,23,42,.08);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-7px) scale(.985);
+  transform-origin: top center;
+  transition: opacity 160ms ease, transform 190ms cubic-bezier(.2,.8,.2,1);
+  will-change: opacity, transform;
+}
+.animated-select-menu.is-open { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+.animated-select-search-wrap {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 8px 5px;
+  padding: 0 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #64748b;
+}
+.animated-select-search-wrap:focus-within { border-color: #5eead4; box-shadow: 0 0 0 3px rgba(13,148,136,.12); }
+.animated-select-search-wrap input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+}
+.animated-select-list { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 3px 6px 7px; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.animated-select-list::-webkit-scrollbar { width: 7px; }
+.animated-select-list::-webkit-scrollbar-thumb { border-radius: 99px; background: #cbd5e1; }
+.animated-select-group + .animated-select-group { margin-top: 5px; padding-top: 5px; border-top: 1px solid #e2e8f0; }
+.animated-select-group-label { padding: 6px 9px 4px; color: #64748b; font-size: 10px; font-weight: 750; letter-spacing: .045em; text-transform: uppercase; }
+.animated-select-option {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.animated-select-option:hover, .animated-select-option.is-active { background: #f0fdfa; color: #115e59; }
+.animated-select-option.is-active { transform: translateX(2px); }
+.animated-select-option.is-selected { background: #ccfbf1; color: #115e59; font-weight: 700; }
+.animated-select-option-copy { display: grid; min-width: 0; gap: 1px; }
+.animated-select-option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.animated-select-option-detail { overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.animated-select-empty { padding: 14px 9px; color: #64748b; font-size: 12px; text-align: center; }
+.results .result-list, .clarify-options { animation: route-dropdown-in 180ms cubic-bezier(.2,.8,.2,1) both; transform-origin: top center; }
+@keyframes route-dropdown-in { from { opacity: 0; transform: translateY(-5px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+[data-theme='dark'] .animated-select-trigger { color: #e2e8f0; }
+[data-theme='dark'] .animated-select-trigger:hover:not(:disabled), [data-theme='dark'] .animated-select.is-open .animated-select-trigger { background: #1e293b; color: #5eead4; }
+[data-theme='dark'] .animated-select-value.is-placeholder { color: #94a3b8; }
+[data-theme='dark'] .animated-select-menu { border-color: #334155; background: rgba(15,23,42,.98); color: #e2e8f0; box-shadow: 0 16px 40px rgba(0,0,0,.42); }
+[data-theme='dark'] .animated-select-search-wrap { border-color: #475569; background: #1e293b; color: #94a3b8; }
+[data-theme='dark'] .animated-select-search-wrap input { color: #f1f5f9; }
+[data-theme='dark'] .animated-select-group + .animated-select-group { border-color: #334155; }
+[data-theme='dark'] .animated-select-group-label, [data-theme='dark'] .animated-select-option-detail, [data-theme='dark'] .animated-select-empty { color: #94a3b8; }
+[data-theme='dark'] .animated-select-option { color: #cbd5e1; }
+[data-theme='dark'] .animated-select-option:hover, [data-theme='dark'] .animated-select-option.is-active { background: #134e4a; color: #ccfbf1; }
+[data-theme='dark'] .animated-select-option.is-selected { background: #115e59; color: #f0fdfa; }
+@media (prefers-reduced-motion: reduce) {
+  .animated-select-menu, .animated-select-option, .animated-select-chevron { transition-duration: .01ms !important; }
+  .results .result-list, .clarify-options { animation-duration: .01ms !important; }
+}
