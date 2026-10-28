@@ -1,15 +1,14 @@
 import { memo, useEffect, useMemo } from 'react';
-import { Edges } from '@react-three/drei';
 import { BoxGeometry, MeshStandardMaterial } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BLOCKS, BUILDING_BOUNDS, CORE, DOOR_WIDTH, EXTERIOR_DOORS, WALL_THICKNESS } from '../data/layout';
-import type { Level, RoomDef } from '../types/building';
+import type { Level, RoomCategory, RoomDef } from '../types/building';
 import type { Language } from '../types/navigation';
 import { slabGeometry, wallBoxesForRect, wallBoxesToGeometry } from './geometry';
 import { CUTAWAY_WALL_HEIGHT, levelToY, PLATE_THICKNESS, WALL_HEIGHT } from './levels';
 import type { SceneMaterials } from './palette';
 import { CorridorPlates } from './Corridor';
-import { RoomLabel, RoomPlate } from './Room';
+import { RoomPlate } from './Room';
 import { useOwnedGeometry } from './useGeometry';
 
 export interface FloorProps {
@@ -21,6 +20,7 @@ export interface FloorProps {
   rooms: RoomDef[];
   materials: SceneMaterials;
   destinationId: string | null;
+  categoryFilter: RoomCategory | 'circulation' | null;
   selectedRoomId: string | null;
   startRoomId: string | null;
   labels: boolean;
@@ -56,31 +56,24 @@ function DoorwayFrame({ room, materials }: { room: RoomDef; materials: SceneMate
   );
 }
 
-/** Walls for every room on one floor, merged into a single geometry. */
 function useInteriorWalls(rooms: RoomDef[], cutaway: boolean) {
   return useOwnedGeometry(() => {
     const boxes = rooms.flatMap((room) => wallBoxesForRect(BLOCKS[room.block].rect, [room.door], WALL_THICKNESS));
-    // Service block behind the lift and stair shafts is solid.
     boxes.push(...wallBoxesForRect(CORE.service, [], WALL_THICKNESS));
     return wallBoxesToGeometry(boxes, cutaway ? CUTAWAY_WALL_HEIGHT : WALL_HEIGHT);
   }, [rooms, cutaway]);
 }
 
-/** Translucent exterior walls with the main and emergency entrance gaps. */
 function useShellGeometry(cutaway: boolean) {
   return useOwnedGeometry(() => {
     const height = cutaway ? CUTAWAY_WALL_HEIGHT : WALL_HEIGHT;
-    const boxes = wallBoxesForRect(BUILDING_BOUNDS, EXTERIOR_DOORS, SHELL_THICKNESS, 3);
-    return wallBoxesToGeometry(boxes, height);
+    return wallBoxesToGeometry(wallBoxesForRect(BUILDING_BOUNDS, EXTERIOR_DOORS, SHELL_THICKNESS, 3), height);
   }, [cutaway]);
 }
 
-/** Open glass volume that outlines the building footprint. */
 function useGlassGeometry() {
   return useOwnedGeometry(() => {
-    const width = BUILDING_BOUNDS.x1 - BUILDING_BOUNDS.x0;
-    const depth = BUILDING_BOUNDS.z1 - BUILDING_BOUNDS.z0;
-    const geometry = new BoxGeometry(width, WALL_HEIGHT, depth);
+    const geometry = new BoxGeometry(BUILDING_BOUNDS.x1 - BUILDING_BOUNDS.x0, WALL_HEIGHT, BUILDING_BOUNDS.z1 - BUILDING_BOUNDS.z0);
     geometry.translate(0, WALL_HEIGHT / 2, 0);
     return geometry;
   }, []);
@@ -116,7 +109,7 @@ function useStairLanding() {
  * Positioned at its level's height, so floors line up with the lifts and stairs.
  */
 function FloorBase(props: FloorProps) {
-  const { level, language, explode, cutaway, visible, rooms, materials, destinationId, selectedRoomId, startRoomId, labels, keyLabelsOnly, routeActive, ghost = false, onRoomSelect } = props;
+  const { level, explode, cutaway, visible, rooms, materials, destinationId, categoryFilter, ghost = false, onRoomSelect } = props;
   const y = levelToY(level, explode);
   const walls = useInteriorWalls(rooms, cutaway);
   const shell = useShellGeometry(cutaway);
@@ -128,36 +121,29 @@ function FloorBase(props: FloorProps) {
     const clone = (source: MeshStandardMaterial): MeshStandardMaterial => {
       const material = source.clone();
       material.transparent = true;
-      material.opacity = 0.05;
-      material.wireframe = true;
+      material.opacity = 0.15;
+      material.wireframe = false;
       material.depthWrite = false;
       return material;
     };
     return {
       floors: Object.fromEntries(Object.entries(materials.floors).map(([key, value]) => [key, clone(value)])) as SceneMaterials['floors'],
       walls: clone(materials.walls), exterior: clone(materials.exterior), shell: clone(materials.shell),
-      shaft: clone(materials.shaft), stair: clone(materials.stair), car: clone(materials.car),
+      shaft: clone(materials.shaft), shaftActive: clone(materials.shaftActive), stair: clone(materials.stair), car: clone(materials.car),
       highlight: clone(materials.highlight), doorFrame: clone(materials.doorFrame), skybridge: clone(materials.skybridge), blockedCorridor: clone(materials.blockedCorridor), ground: clone(materials.ground),
       routeGlow: materials.routeGlow,
-      dispose() { Object.values(this.floors).forEach((m) => m.dispose()); [this.walls, this.exterior, this.shell, this.shaft, this.stair, this.car, this.highlight, this.doorFrame, this.skybridge, this.blockedCorridor, this.ground].forEach((m) => m.dispose()); },
+      dispose() { Object.values(this.floors).forEach((m) => m.dispose()); [this.walls, this.exterior, this.shell, this.shaft, this.shaftActive, this.stair, this.car, this.highlight, this.doorFrame, this.skybridge, this.blockedCorridor, this.ground].forEach((m) => m.dispose()); },
     } satisfies SceneMaterials;
   }, [materials]);
   const activeMaterials = ghost ? ghostMats : materials;
   useEffect(() => () => ghostMats.dispose(), [ghostMats]);
 
-  const isKey = (room: RoomDef): boolean => room.id === destinationId || room.id === selectedRoomId || room.id === startRoomId;
-  const labelRooms = useMemo(
-    () => (labels && visible ? rooms.filter((room) => (!routeActive || (room.id !== destinationId && room.id !== startRoomId)) && (!keyLabelsOnly || isKey(room))) : []),
-    // isKey closes over the selection ids, which are listed explicitly below.
-    [labels, visible, rooms, keyLabelsOnly, routeActive, destinationId, selectedRoomId, startRoomId],
-  );
-
   return (
     <group position={[0, y, 0]} visible={visible}>
       <mesh geometry={base} material={activeMaterials.floors.corridor} receiveShadow />
       <CorridorPlates materials={activeMaterials} />
-      <mesh geometry={serviceSlab} material={activeMaterials.floors.circulation} receiveShadow />
-      <mesh geometry={landing} material={activeMaterials.stair} receiveShadow />
+      <mesh geometry={serviceSlab} material={activeMaterials.floors.corridor} receiveShadow />
+      <mesh geometry={landing} material={activeMaterials.floors.corridor} receiveShadow />
 
       {rooms.map((room) => (
         <RoomPlate
@@ -165,6 +151,7 @@ function FloorBase(props: FloorProps) {
           room={room}
           materials={activeMaterials}
           highlighted={room.id === destinationId}
+          dimmed={categoryFilter !== null && room.category !== categoryFilter}
           onSelect={onRoomSelect}
         />
       ))}
@@ -172,13 +159,8 @@ function FloorBase(props: FloorProps) {
       {walls ? <mesh geometry={walls} material={activeMaterials.walls} castShadow receiveShadow /> : null}
       {rooms.map((room) => <DoorwayFrame key={`door-${room.id}`} room={room} materials={activeMaterials} />)}
       {shell ? <mesh geometry={shell} material={activeMaterials.exterior} renderOrder={2} castShadow /> : null}
-      <mesh geometry={glass} material={activeMaterials.shell} renderOrder={1}>
-        <Edges color="#5f93d3" />
-      </mesh>
+      <mesh geometry={glass} material={activeMaterials.shell} renderOrder={1} />
 
-      {!ghost ? labelRooms.map((room) => (
-        <RoomLabel key={room.id} room={room} language={language} floorY={0} emphasis={isKey(room) ? 'key' : 'normal'} active={room.id === destinationId} />
-      )) : null}
     </group>
   );
 }

@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react';
-import { X } from 'lucide-react';
+import { X, Droplet, Siren, Pill, Accessibility } from 'lucide-react';
 import { DESTINATIONS } from '../../data/destinations';
 import { CATEGORY_META } from '../../i18n/categories';
 import { tr } from '../../i18n/strings';
@@ -128,10 +128,10 @@ export function DestinationSearch({ language, clarification, feedback, voice, on
       <VoiceButton language={language} voice={voice} />
       </div>
       <div className="quick-chips" role="group" aria-label={language === 'hi' ? 'त्वरित गंतव्य' : 'Quick destinations'}>
-        <button type="button" className="quick-chip" onClick={() => choose('2-BB')}>{language === 'hi' ? 'ब्लड बैंक' : 'Blood Bank'}</button>
-        <button type="button" className="quick-chip" onClick={() => choose('G-EMG')}>{language === 'hi' ? 'आपातकालीन' : 'Emergency'}</button>
-        <button type="button" className="quick-chip" onClick={() => choose('G-PHM')}>{language === 'hi' ? 'फार्मेसी' : 'Pharmacy'}</button>
-        <button type="button" className="quick-chip" onClick={() => { setQuery('washroom'); setActive(0); }}>{language === 'hi' ? 'शौचालय' : 'Washroom'}</button>
+        <button type="button" className="quick-chip chip-blood" onClick={() => choose('2-BB')}><Droplet size={13} aria-hidden="true" />{language === 'hi' ? 'ब्लड बैंक' : 'Blood Bank'}</button>
+        <button type="button" className="quick-chip chip-emergency" onClick={() => choose('G-EMG')}><Siren size={13} aria-hidden="true" />{language === 'hi' ? 'आपातकालीन' : 'Emergency'}</button>
+        <button type="button" className="quick-chip chip-pharmacy" onClick={() => choose('G-PHM')}><Pill size={13} aria-hidden="true" />{language === 'hi' ? 'फार्मेसी' : 'Pharmacy'}</button>
+        <button type="button" className="quick-chip chip-washroom" onClick={() => { setQuery('washroom'); setActive(0); }}><Accessibility size={13} aria-hidden="true" />{language === 'hi' ? 'शौचालय' : 'Washroom'}</button>
       </div>
 
       {open ? (

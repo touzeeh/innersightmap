@@ -16,16 +16,18 @@ export interface CameraRigProps {
   mode: CameraMode;
   /** Changes whenever the camera should animate to the mode's framing. */
   nonce: number;
+  focusPoint: Vector3 | null;
   focusLevel: number | null;
   explode: number;
   reducedMotion: boolean;
   bus: SceneBus;
   destination: Vector3 | null;
+  routeBounds: { center: Vector3; radius: number } | null;
   groundRoute?: boolean;
 }
 
-const OVERVIEW_OFFSET = new Vector3(32, 15, 34);
-const GROUND_ROUTE_OFFSET = new Vector3(32, 23, 34);
+const OVERVIEW_OFFSET = new Vector3(45, 36, 45);
+const GROUND_ROUTE_OFFSET = new Vector3(36, 34, 36);
 const FLOOR_OFFSET = new Vector3(34, 40, 40);
 const CLOSEUP_OFFSET = new Vector3(7.5, 7.5, 9);
 const FOLLOW_OFFSET = new Vector3(9, 10, 9);
@@ -57,7 +59,7 @@ interface Tween {
  * orbit or zoom: a drag cancels a transition, and follow modes move the camera
  * by the avatar's displacement so the chosen viewing angle is kept.
  */
-export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus, destination, groundRoute = false }: CameraRigProps) {
+export function CameraRig({ mode, nonce, focusPoint, focusLevel, explode, reducedMotion, bus, destination, routeBounds, groundRoute = false }: CameraRigProps) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const controls = useThree((s) => s.controls) as unknown as OrbitLike | null;
@@ -71,8 +73,8 @@ export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus
   const defaultFov = useRef(camera instanceof PerspectiveCamera ? camera.fov : 36);
 
   // Latest values for the framing effect, which runs only when mode or nonce change.
-  const latest = useRef({ focusLevel, explode, destination, reducedMotion, groundRoute });
-  latest.current = { focusLevel, explode, destination, reducedMotion, groundRoute };
+  const latest = useRef({ focusLevel, explode, destination, focusPoint, reducedMotion, groundRoute, routeBounds });
+  latest.current = { focusLevel, explode, destination, focusPoint, reducedMotion, groundRoute, routeBounds };
 
   // A user drag cancels any transition in progress.
   useEffect(() => {
@@ -93,7 +95,7 @@ export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus
 
   useEffect(() => {
     if (!controls) return;
-    const { focusLevel: level, explode: ex, destination: dest, reducedMotion: reduced, groundRoute: ground } = latest.current;
+    const { focusLevel: level, explode: ex, destination: dest, focusPoint: focus, reducedMotion: reduced, groundRoute: ground, routeBounds: bounds } = latest.current;
     const offset = new Vector3();
     let targetFor: (out: Vector3) => Vector3;
 
@@ -105,14 +107,14 @@ export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus
         break;
       }
       case 'closeup':
-        if (dest) {
+        if (focus || dest) {
           offset.copy(CLOSEUP_OFFSET);
-          const point = dest.clone().add(new Vector3(0, 1, 0));
+          const point = (focus ?? dest)!.clone();
           targetFor = (out) => out.copy(point);
           break;
         }
         offset.copy(OVERVIEW_OFFSET);
-        targetFor = (out) => out.set(0, levelToY(1.5, ex) + 2, 0);
+        targetFor = (out) => out.set(0, 2, 0);
         break;
       case 'follow':
         offset.copy(FOLLOW_OFFSET);
@@ -124,12 +126,18 @@ export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus
         break;
       case 'topdown':
         offset.copy(TOPDOWN_OFFSET);
-        targetFor = (out) => out.copy(bus.avatar);
+        if (bounds) offset.y = Math.max(TOPDOWN_OFFSET.y, bounds.radius * 2.65);
+        targetFor = (out) => out.copy(bounds?.center ?? bus.avatar);
         break;
       case 'overview':
       default:
-        offset.copy(ground ? GROUND_ROUTE_OFFSET : OVERVIEW_OFFSET);
-        targetFor = (out) => out.set(0, levelToY(1.5, ex) + 2, 0);
+        if (bounds) {
+          offset.copy(OVERVIEW_OFFSET).normalize().multiplyScalar(Math.max(52, bounds.radius * 2.8));
+          targetFor = (out) => out.copy(bounds.center);
+        } else {
+          offset.copy(ground ? GROUND_ROUTE_OFFSET : OVERVIEW_OFFSET);
+          targetFor = (out) => out.set(0, 2, 0);
+        }
         break;
     }
 
@@ -153,7 +161,7 @@ export function CameraRig({ mode, nonce, focusLevel, explode, reducedMotion, bus
       targetFor,
     };
     // Depends on mode and nonce only; the other values are read from `latest`.
-  }, [mode, nonce, controls]);
+  }, [mode, nonce, controls, routeBounds]);
 
   useFrame((_, delta) => {
     clock.current += Math.min(delta, 0.05);

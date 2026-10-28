@@ -19,6 +19,7 @@ export interface Spawn {
 export interface AvatarProgress {
   instructionIndex: number;
   progress: number;
+  positionMetres: number;
   remainingMetres: number;
   currentLevel: number;
 }
@@ -29,6 +30,8 @@ export interface AvatarProps {
   spawn: Spawn;
   status: NavStatus;
   speed: number;
+  seekNonce: number;
+  seekTime: number;
   explode: number;
   reducedMotion: boolean;
   bus: SceneBus;
@@ -59,7 +62,7 @@ function shortestAngle(from: number, to: number): number {
  * Movement comes from the route timeline, not from a free-running animation,
  * so the avatar cannot leave the route, pass through walls or float between floors.
  */
-export function Avatar({ timeline, instructions, spawn, status, speed, explode, reducedMotion, bus, onProgress, onArrive }: AvatarProps) {
+export function Avatar({ timeline, instructions, spawn, status, speed, seekNonce, seekTime, explode, reducedMotion, bus, onProgress, onArrive }: AvatarProps) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const armL = useRef<Group>(null);
@@ -84,6 +87,7 @@ export function Avatar({ timeline, instructions, spawn, status, speed, explode, 
   const onProgressRef = useRef(onProgress);
   const onArriveRef = useRef(onArrive);
   const spawnRef = useRef(spawn);
+  const seekTimeRef = useRef(seekTime);
 
   // Keep latest props in refs so the frame loop reads current values without re-subscribing.
   useEffect(() => {
@@ -96,7 +100,17 @@ export function Avatar({ timeline, instructions, spawn, status, speed, explode, 
     onProgressRef.current = onProgress;
     onArriveRef.current = onArrive;
     spawnRef.current = spawn;
+    seekTimeRef.current = seekTime;
   });
+
+  useEffect(() => {
+    if (seekNonce === 0) return;
+    const current = timelineRef.current;
+    if (!current) return;
+    timeRef.current = Math.max(0, Math.min(current.duration, seekTimeRef.current));
+    arrivedRef.current = false;
+    lastReport.current = { instruction: -1, at: -Infinity };
+  }, [seekNonce]);
 
   // A new route, or a restart from the beginning, puts the avatar back at its start.
   useEffect(() => {
@@ -198,6 +212,7 @@ export function Avatar({ timeline, instructions, spawn, status, speed, explode, 
       onProgressRef.current({
         instructionIndex,
         progress: progressAt(current, timeRef.current),
+        positionMetres: sampleTimeline(current, timeRef.current).metresWalked,
         remainingMetres: remainingMetres(current, timeRef.current),
         currentLevel: displayLevel(sample.level),
       });

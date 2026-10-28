@@ -1,11 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { BLOCKS } from '../data/layout';
 import type { RoomDef } from '../types/building';
 import type { Language } from '../types/navigation';
 import { slabGeometry } from './geometry';
-import { PLATE_THICKNESS } from './levels';
 import type { SceneMaterials } from './palette';
 import { useOwnedGeometry } from './useGeometry';
 import { setCursor } from './cursor';
@@ -14,13 +13,24 @@ export interface RoomPlateProps {
   room: RoomDef;
   materials: SceneMaterials;
   highlighted: boolean;
+  dimmed?: boolean;
   onSelect: (roomId: string) => void;
 }
 
 /** The walkable floor of one room. Clicking it selects the room on the map. */
-export function RoomPlate({ room, materials, highlighted, onSelect }: RoomPlateProps) {
+export function RoomPlate({ room, materials, highlighted, dimmed = false, onSelect }: RoomPlateProps) {
   const block = BLOCKS[room.block];
-  const geometry = useOwnedGeometry(() => slabGeometry(block.rect, PLATE_THICKNESS), [block]);
+  const geometry = useOwnedGeometry(() => slabGeometry(block.rect, 0.4), [block]);
+  const dimmedMaterial = useMemo(() => {
+    if (!dimmed) return null;
+    const material = materials.floors[room.category].clone();
+    material.transparent = true;
+    material.opacity = 0.08;
+    material.emissiveIntensity = 0;
+    material.depthWrite = false;
+    return material;
+  }, [dimmed, materials, room.category]);
+  useEffect(() => () => dimmedMaterial?.dispose(), [dimmedMaterial]);
 
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
@@ -33,7 +43,7 @@ export function RoomPlate({ room, materials, highlighted, onSelect }: RoomPlateP
   return (
     <mesh
       geometry={geometry}
-      material={highlighted ? materials.highlight : materials.floors[room.category]}
+      material={highlighted ? materials.highlight : dimmedMaterial ?? materials.floors[room.category]}
       receiveShadow
       userData={{ roomId: room.id }}
       onClick={handleClick}

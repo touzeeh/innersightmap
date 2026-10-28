@@ -24,9 +24,14 @@ export interface AppState {
   navStatus: NavStatus;
   instructionIndex: number;
   progress: number;
+  /** Walking metres covered; drives the bar, approach events and voice. */
+  positionMetres: number;
   remainingMetres: number;
   currentLevel: number;
   speed: 1 | 2 | 4;
+  /** Scene timeline seek request, driven by navigation bar segment/step controls. */
+  seekTime: number;
+  seekNonce: number;
   muted: boolean;
   /** Incremented to ask the announcer to repeat the current instruction. */
   repeatNonce: number;
@@ -34,6 +39,7 @@ export interface AppState {
   focusLevel: Level | null;
   explode: number;
   cameraMode: CameraMode;
+  cameraFocusNode: string | null;
   /** Incremented whenever the camera should animate to the mode's framing. */
   cameraNonce: number;
   cutaway: boolean;
@@ -54,7 +60,8 @@ export type AppAction =
   | { type: 'nav-resume' }
   | { type: 'nav-stop' }
   | { type: 'nav-arrive' }
-  | { type: 'nav-progress'; instructionIndex: number; progress: number; remainingMetres: number; currentLevel: number }
+  | { type: 'nav-progress'; instructionIndex: number; progress: number; positionMetres?: number; remainingMetres: number; currentLevel: number }
+  | { type: 'nav-seek'; instructionIndex: number; progress: number; positionMetres: number; remainingMetres: number; currentLevel: number; seekTime: number }
   | { type: 'set-speed'; speed: 1 | 2 | 4 }
   | { type: 'toggle-mute' }
   | { type: 'repeat-instruction' }
@@ -62,6 +69,7 @@ export type AppAction =
   | { type: 'solo-floor'; level: Level | null }
   | { type: 'set-explode'; explode: number }
   | { type: 'set-camera'; mode: CameraMode; focusLevel?: Level | null }
+  | { type: 'focus-route-node'; nodeId: string }
   | { type: 'recenter-camera' }
   | { type: 'set-cutaway'; cutaway: boolean }
   | { type: 'set-low-detail'; lowDetail: boolean }
@@ -84,15 +92,19 @@ export function initialState(): AppState {
     navStatus: 'idle',
     instructionIndex: 0,
     progress: 0,
+    positionMetres: 0,
     remainingMetres: 0,
     currentLevel: 0,
     speed: prefs.speed,
+    seekTime: 0,
+    seekNonce: 0,
     muted: prefs.muted,
     repeatNonce: 0,
     floorVisible: ALL_VISIBLE,
     focusLevel: null,
     explode: 0,
     cameraMode: 'overview',
+    cameraFocusNode: null,
     cameraNonce: 0,
     cutaway: prefs.cutaway,
     lowDetail: prefs.lowDetail,
@@ -103,7 +115,7 @@ export function initialState(): AppState {
 }
 
 function stopState(state: AppState): AppState {
-  return { ...state, navStatus: 'idle', instructionIndex: 0, progress: 0, remainingMetres: 0 };
+  return { ...state, navStatus: 'idle', instructionIndex: 0, progress: 0, positionMetres: 0, remainingMetres: 0, seekTime: 0, seekNonce: state.seekNonce + 1 };
 }
 
 export function reducer(state: AppState, action: AppAction): AppState {
@@ -131,15 +143,27 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'nav-stop':
       return stopState(state);
     case 'nav-arrive':
-      return { ...state, navStatus: 'arrived', progress: 1, remainingMetres: 0 };
+      return { ...state, navStatus: 'arrived', progress: 1, positionMetres: state.positionMetres + state.remainingMetres, remainingMetres: 0 };
     case 'nav-progress':
       if (state.navStatus === 'idle') return state;
       return {
         ...state,
         instructionIndex: action.instructionIndex,
         progress: action.progress,
+        positionMetres: action.positionMetres ?? state.positionMetres,
         remainingMetres: action.remainingMetres,
         currentLevel: action.currentLevel,
+      };
+    case 'nav-seek':
+      return {
+        ...state,
+        instructionIndex: action.instructionIndex,
+        progress: action.progress,
+        positionMetres: action.positionMetres,
+        remainingMetres: action.remainingMetres,
+        currentLevel: action.currentLevel,
+        seekTime: action.seekTime,
+        seekNonce: state.seekNonce + 1,
       };
     case 'set-speed':
       return { ...state, speed: action.speed };
@@ -166,9 +190,12 @@ export function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         cameraMode: action.mode,
+        cameraFocusNode: null,
         focusLevel: action.focusLevel !== undefined ? action.focusLevel : state.focusLevel,
         cameraNonce: state.cameraNonce + 1,
       };
+    case 'focus-route-node':
+      return { ...state, cameraMode: 'closeup', cameraFocusNode: action.nodeId, cameraNonce: state.cameraNonce + 1 };
     case 'recenter-camera':
       return { ...state, cameraMode: 'overview', cameraNonce: state.cameraNonce + 1, floorVisible: ALL_VISIBLE, focusLevel: null };
     case 'set-cutaway':

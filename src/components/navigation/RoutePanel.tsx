@@ -1,8 +1,9 @@
-import { ArrowUp, ArrowUpDown, CircleCheck, CornerUpLeft, CornerUpRight, DoorOpen, Flag, Play, X, LocateFixed } from 'lucide-react';
-import { START_POINTS } from '../../data/destinations';
-import { CATEGORY_META } from '../../i18n/categories';
+import { useEffect, useRef } from 'react';
+import { ArrowUp, ArrowUpDown, CircleCheck, CornerUpLeft, CornerUpRight, DoorOpen, Flag, X, LocateFixed, Play } from 'lucide-react';
+import { DESTINATIONS, START_POINTS } from '../../data/destinations';
+import { ROOMS } from '../../data/rooms';
 import { tr } from '../../i18n/strings';
-import { destinationLabel, startLabel } from '../../services/destinationSearch';
+import { floorLabel, startLabel } from '../../services/destinationSearch';
 import { formatEstimate } from '../../services/routePlanner';
 import type { Destination, Instruction, Language, NavStatus, PickMode, PlanResult, TravelPreference } from '../../types/navigation';
 
@@ -20,6 +21,8 @@ export interface RoutePanelProps {
   onPreferenceChange: (preference: TravelPreference) => void;
   onPickMode: (mode: PickMode) => void;
   onClearDestination: () => void;
+  onDestinationChange: (id: string) => void;
+  onFocusNode: (nodeId: string) => void;
   onStart: () => void;
   onSwap: () => void;
   blockedCorridor: string | null;
@@ -66,25 +69,49 @@ export function RoutePanel({
   onPreferenceChange,
   onPickMode,
   onClearDestination,
+  onDestinationChange,
+  onFocusNode,
   onStart,
   onSwap,
   blockedCorridor,
   onToggleBlockedCorridor,
 }: RoutePanelProps) {
   const startOptions = START_POINTS.map((s) => ({ id: s.id, label: startLabel(s.id, language) }));
+  const wingName = (id: string): string => {
+    const room = ROOMS.find((candidate) => candidate.id === id);
+    if (!room) return language === 'hi' ? 'कनेक्टर' : 'Connectors';
+    if (room.block.startsWith('WA')) return language === 'hi' ? 'विंग A · ओपीडी' : 'Wing A · OPD';
+    if (room.block.startsWith('WB')) return language === 'hi' ? 'विंग B · इमरजेंसी' : 'Wing B · Emergency';
+    if (room.block.startsWith('WC')) return language === 'hi' ? 'विंग C · जांच और लैब' : 'Wing C · Diagnostics & Labs';
+    if (room.door[0] < -20) return language === 'hi' ? 'विंग B · इमरजेंसी' : 'Wing B · Emergency';
+    if (room.door[0] > 20) return language === 'hi' ? 'विंग C · जांच और लैब' : 'Wing C · Diagnostics & Labs';
+    return language === 'hi' ? 'मुख्य विंग' : 'Main Wing';
+  };
+  const destinationsByFloor = [0, 1, 2, 3].flatMap((level) => {
+    const onFloor = DESTINATIONS.filter((item) => item.level === level);
+    const wingNames = [...new Set(onFloor.map((item) => wingName(item.id)))];
+    return wingNames.map((wing) => ({ level, wing, items: onFloor.filter((item) => wingName(item.id) === wing) }));
+  });
   if (selectedRoomId && !START_POINTS.some((s) => s.id === selectedRoomId)) {
     startOptions.push({ id: selectedRoomId, label: startLabel(selectedRoomId, language) });
   }
   const route = plan?.ok ? plan.route : null;
-  const meta = destination ? CATEGORY_META[destination.category] : null;
-  const DestIcon = meta?.icon;
   const navigating = navStatus === 'navigating' || navStatus === 'paused';
+  const activeStepRef = useRef<HTMLLIElement | null>(null);
+  const showDevControls = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dev') === '1';
+
+  useEffect(() => {
+    if (navStatus === 'navigating' && activeStepRef.current) {
+      activeStepRef.current.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [activeInstruction, navStatus]);
 
   return (
     <section className="panel route-panel" aria-labelledby="route-heading">
-      <header className="panel-head">
-        <h2 id="route-heading">{tr('routeHeading', language)}</h2>
-      </header>
+      <div className="route-scroll-area">
+        <header className="panel-head">
+          <h2 id="route-heading">{tr('routeHeading', language)}</h2>
+        </header>
 
       <div className="route-pair">
         {destination ? <button type="button" className="route-swap" aria-label={language === 'hi' ? 'शुरुआत और गंतव्य बदलें' : 'Swap start and destination'} title={language === 'hi' ? 'शुरुआत और गंतव्य बदलें' : 'Swap start and destination'} onClick={onSwap} disabled={navigating}>⇅</button> : null}
@@ -110,21 +137,16 @@ export function RoutePanel({
         </div>
         <div className="route-input-row destination-input-row">
           <span className="route-dot destination-dot" aria-hidden="true" />
-        {destination && meta && DestIcon ? (
-          <div className="dest-card route-dest-card">
-            <span className="result-icon" style={{ color: meta.accent }} aria-hidden="true"><DestIcon size={20} /></span>
-            <div className="dest-text">
-              <strong>{language === 'hi' ? destination.nameHi : destination.name}</strong>
-              <span className="result-meta">{destinationLabel(destination, language)}</span>
-              <span className="chip" style={{ borderColor: meta.accent, color: meta.accent }}>{meta.label[language]}</span>
-            </div>
-            <button type="button" className="icon-button" onClick={onClearDestination} aria-label={tr('clearDestination', language)} disabled={navigating}>
-              <X size={16} aria-hidden="true" />
-            </button>
-          </div>
-        ) : (
-          <span className="route-placeholder">{tr('chooseDestination', language)}</span>
-        )}
+        <label className="visually-hidden" htmlFor="destination-select">{tr('searchHeading', language)}</label>
+        <select id="destination-select" className="destination-select" value={destination?.id ?? ''} onChange={(event) => onDestinationChange(event.target.value)} disabled={navigating}>
+          <option value="">{tr('chooseDestination', language)}</option>
+          {destinationsByFloor.map(({ level, wing, items }) => (
+            <optgroup key={`${level}-${wing}`} label={`${floorLabel(level as 0 | 1 | 2 | 3, language)} · ${wing}`}>
+              {items.map((item) => <option key={item.id} value={item.id}>{item.roomNumber ? `${item.roomNumber} · ` : ''}{language === 'hi' ? item.nameHi : item.name}</option>)}
+            </optgroup>
+          ))}
+        </select>
+        {destination ? <button type="button" className="icon-button destination-clear" onClick={onClearDestination} aria-label={tr('clearDestination', language)} disabled={navigating}><X size={16} aria-hidden="true" /></button> : null}
         <button
           type="button"
           className={`icon-button map-pick${pickMode === 'destination' ? ' is-on' : ''}`}
@@ -157,9 +179,9 @@ export function RoutePanel({
 
       {route ? (
         <>
-          <button type="button" className={`corridor-test-button${blockedCorridor ? ' is-blocked' : ''}`} onClick={onToggleBlockedCorridor} disabled={navigating} aria-pressed={Boolean(blockedCorridor)}>
+          {showDevControls ? <button type="button" className={`corridor-test-button${blockedCorridor ? ' is-blocked' : ''}`} onClick={onToggleBlockedCorridor} disabled={navigating} aria-pressed={Boolean(blockedCorridor)}>
             {blockedCorridor ? '↻ Restore corridor' : '🚧 Block Corridor (Test Rerouting)'}
-          </button>
+          </button> : null}
           <dl className="summary">
             <div>
               <dt>{tr('distance', language)}</dt>
@@ -181,27 +203,26 @@ export function RoutePanel({
                 {route.instructions.map((ins) => {
                   const isActive = navigating && ins.index === activeInstruction;
                   return (
-                    <li key={ins.index} className={isActive ? 'is-active' : ''} aria-current={isActive ? 'step' : undefined}>
+                    <li key={ins.index} ref={isActive ? activeStepRef : undefined} className={isActive ? 'is-active' : ''} aria-current={isActive ? 'step' : undefined}>
+                      <button type="button" className="direction-step-button" onClick={() => { const nodeId = route.nodeIds[ins.nodeIndex]; if (nodeId) onFocusNode(nodeId); }} aria-label={`${language === 'hi' ? 'मानचित्र पर दिखाएँ:' : 'Show on map:'} ${ins.text[language]}`}>
                       <span className="direction-icon"><InstructionIcon instruction={ins} /></span>
                       <span>{ins.text[language]}</span>
+                      </button>
                     </li>
                   );
                 })}
               </ol>
             </div>
           </div>
-
-          <button
-            type="button"
-            className="primary-button"
-            onClick={onStart}
-            disabled={navigating}
-          >
-            <Play size={18} aria-hidden="true" />
-            {tr('startNavigation', language)}
-          </button>
         </>
       ) : null}
+      </div>
+      {route ? <footer className="route-footer">
+        <button type="button" className="primary-button route-start-button" onClick={onStart} disabled={navigating || !route}>
+          <Play size={17} fill="currentColor" aria-hidden="true" />
+          {tr('startNavigation', language)}
+        </button>
+      </footer> : null}
     </section>
   );
 }

@@ -16,7 +16,7 @@ export function corridorRect(from: readonly [number, number], to: readonly [numb
   };
 }
 
-/** Walkable corridor floors, one slab per corridor centreline. */
+/** Walkable corridor floors as clean matte-white slabs. */
 export function CorridorPlates({ materials }: { materials: SceneMaterials }) {
   const geometries = useMemo(
     () =>
@@ -24,27 +24,16 @@ export function CorridorPlates({ materials }: { materials: SceneMaterials }) {
         const rect = corridorRect(corridor.from, corridor.to);
         const geometry = new BoxGeometry(rect.x1 - rect.x0, PLATE_THICKNESS, rect.z1 - rect.z0);
         geometry.translate((rect.x0 + rect.x1) / 2, -PLATE_THICKNESS / 2, (rect.z0 + rect.z1) / 2);
-        const alongX = Math.abs(corridor.to[0] - corridor.from[0]) >= Math.abs(corridor.to[1] - corridor.from[1]);
-        const stripes = [-1, 1].map((side) => {
-          const stripe = new BoxGeometry(alongX ? rect.x1 - rect.x0 : 0.07, 0.035, alongX ? 0.07 : rect.z1 - rect.z0);
-          stripe.translate((rect.x0 + rect.x1) / 2 + (alongX ? 0 : side * (CORRIDOR_WIDTH / 2 - 0.24)), 0.025, (rect.z0 + rect.z1) / 2 + (alongX ? side * (CORRIDOR_WIDTH / 2 - 0.24) : 0));
-          return stripe;
-        });
-        return { floor: geometry, stripes };
+        return geometry;
       }),
     [],
   );
 
-  useEffect(() => () => geometries.forEach(({ floor, stripes }) => { floor.dispose(); stripes.forEach((g) => g.dispose()); }), [geometries]);
+  useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries]);
 
   return (
     <>
-      {geometries.map(({ floor, stripes }, i) => (
-        <group key={CORRIDORS[i].id}>
-          <mesh geometry={floor} material={materials.floors.corridor} receiveShadow />
-          {stripes.map((geometry, stripeIndex) => <mesh key={stripeIndex} geometry={geometry} material={materials.routeGlow} renderOrder={4} />)}
-        </group>
-      ))}
+      {geometries.map((geometry, i) => <mesh key={CORRIDORS[i].id} geometry={geometry} material={materials.floors.corridor} receiveShadow />)}
     </>
   );
 }

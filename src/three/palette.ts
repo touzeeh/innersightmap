@@ -28,7 +28,7 @@ export const CATEGORY_TINT: Record<RoomCategory | 'corridor' | 'circulation', st
   washroom: '#93c5fd',
   staff: '#cbd5e1',
   restricted: '#c4b5fd',
-  corridor: '#e2e8f0',
+  corridor: '#F8FAFC',
   circulation: '#a5b4fc',
 };
 
@@ -38,6 +38,7 @@ export interface SceneMaterials {
   exterior: MeshStandardMaterial;
   shell: MeshStandardMaterial;
   shaft: MeshStandardMaterial;
+  shaftActive: MeshStandardMaterial;
   stair: MeshStandardMaterial;
   car: MeshStandardMaterial;
   highlight: MeshStandardMaterial;
@@ -52,7 +53,8 @@ export interface SceneMaterials {
 export function createSceneMaterials(): SceneMaterials {
   const floors = {} as Record<keyof typeof CATEGORY_TINT, MeshStandardMaterial>;
   for (const [key, tint] of Object.entries(CATEGORY_TINT) as [keyof typeof CATEGORY_TINT, string][]) {
-    floors[key] = new MeshStandardMaterial({ color: new Color(tint), emissive: new Color(tint), emissiveIntensity: 0.16, roughness: 0.78, metalness: 0.01 });
+    const isCorridor = key === 'corridor';
+    floors[key] = new MeshStandardMaterial({ color: new Color(tint), emissive: new Color(tint), emissiveIntensity: isCorridor ? 0 : 0.08, roughness: 0.9, metalness: 0, transparent: !isCorridor, opacity: isCorridor ? 1 : 0.92 });
   }
   const walls = new MeshStandardMaterial({ color: '#f8fafc', emissive: '#dbeafe', emissiveIntensity: 0.12, roughness: 0.7, transparent: true, opacity: 0.32, depthWrite: false });
   const exterior = new MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.3, transparent: true, opacity: 0.06, depthWrite: false });
@@ -64,7 +66,8 @@ export function createSceneMaterials(): SceneMaterials {
     opacity: 0.06,
     depthWrite: false,
   });
-  const shaft = new MeshStandardMaterial({ color: '#a5b4fc', roughness: 0.15, transparent: true, opacity: 0.28, depthWrite: false });
+  const shaft = new MeshStandardMaterial({ color: '#0d9488', emissive: '#0d9488', emissiveIntensity: 0.12, roughness: 0.35, transparent: true, opacity: 0.13, depthWrite: false });
+  const shaftActive = new MeshStandardMaterial({ color: '#5eead4', emissive: '#0d9488', emissiveIntensity: 0.5, roughness: 0.25, transparent: true, opacity: 0.48, depthWrite: false, toneMapped: false });
   const stair = new MeshStandardMaterial({ color: '#6366f1', roughness: 0.6 });
   // The car is see-through so the passenger stays visible while riding.
   const car = new MeshStandardMaterial({ color: '#38bdf8', emissive: '#0e7490', emissiveIntensity: 0.72, roughness: 0.24, metalness: 0.12, transparent: true, opacity: 0.34, depthWrite: false, toneMapped: false });
@@ -80,13 +83,14 @@ export function createSceneMaterials(): SceneMaterials {
   const blockedCorridor = new MeshStandardMaterial({ color: '#ef4444', emissive: '#dc2626', emissiveIntensity: 0.85, roughness: 0.34, metalness: 0.08, transparent: true, opacity: 0.9 });
   const ground = new MeshStandardMaterial({ color: '#f4f7fb', emissive: new Color('#dfe7f2'), emissiveIntensity: 0.45, roughness: 1 });
 
-  const all: { dispose(): void }[] = [...Object.values(floors), walls, exterior, shell, shaft, stair, car, highlight, routeGlow, doorFrame, skybridge, blockedCorridor, ground];
+  const all: { dispose(): void }[] = [...Object.values(floors), walls, exterior, shell, shaft, shaftActive, stair, car, highlight, routeGlow, doorFrame, skybridge, blockedCorridor, ground];
   return {
     floors,
     walls,
     exterior,
     shell,
     shaft,
+    shaftActive,
     stair,
     car,
     highlight,

@@ -1,4 +1,4 @@
-import { Building2, Crosshair, Eye, EyeOff, Footprints, MapPin, RotateCcw, RotateCw, SlidersHorizontal } from 'lucide-react';
+import { Building2, Crosshair, Eye, EyeOff, Footprints, MapPin, MoreHorizontal, RotateCcw, RotateCw, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { FLOORS } from '../../data/floors';
 import { tr } from '../../i18n/strings';
@@ -31,17 +31,21 @@ export function FloorSelector(props: Pick<ViewControlsProps, 'language' | 'floor
   const ordered = [...FLOORS].reverse();
   return (
     <section className="floor-dock" aria-label={tr('floorsHeading', language)}>
-      <button type="button" className={`dock-floor dock-floor-all${allVisible ? ' is-on' : ''}`} onClick={() => onSolo(null)} aria-pressed={allVisible} title={tr('showAllFloors', language)}>ALL</button>
+      <button type="button" className={`dock-floor dock-floor-all${allVisible ? ' is-on' : ''}`} onClick={() => onSolo(null)} aria-pressed={allVisible} aria-label={tr('showAllFloors', language)} title={tr('showAllFloors', language)}>
+        <span className="floor-dot floor-dot-all" aria-hidden="true" /><span>ALL</span>
+      </button>
       {ordered.map((floor) => {
         const visible = floorVisible[floor.level];
         const focused = focusLevel === floor.level;
         const name = language === 'hi' ? floor.nameHi : floor.name;
         return (
-          <div className={`dock-floor-row${focused ? ' is-current' : ''}${visible ? '' : ' is-hidden'}`} key={floor.level}>
+          <div className={`dock-floor-row${focused ? ' is-current' : ''}${visible ? '' : ' is-hidden'}`} data-level={floor.level} key={floor.level}>
             <button type="button" className="dock-floor" onClick={() => onSolo(floor.level)} aria-label={`${tr('soloFloor', language)}: ${name}`} aria-pressed={focused} title={name}>
+              <span className="floor-dot" aria-hidden="true" />
               <span className="dock-floor-level">{floor.label === 'G' ? 'G' : `F${floor.label}`}</span>
-              <span className="dock-floor-name">{name}</span>
+              {focused ? <span className="floor-route-badge" aria-label={language === 'hi' ? 'मार्ग मंज़िल' : 'Route floor'} /> : null}
             </button>
+            <span className="dock-floor-name" role="tooltip">{name}</span>
             <button type="button" className="dock-floor-visibility" onClick={() => onToggleFloor(floor.level)} aria-label={`${visible ? tr('hideFloor', language) : tr('showFloor', language)}: ${name}`} aria-pressed={visible} title={visible ? tr('hideFloor', language) : tr('showFloor', language)}>
               {visible ? <Eye size={13} aria-hidden="true" /> : <EyeOff size={13} aria-hidden="true" />}
             </button>
@@ -56,6 +60,7 @@ export function FloorSelector(props: Pick<ViewControlsProps, 'language' | 'floor
 export function CameraControls(props: Pick<ViewControlsProps, 'language' | 'cameraMode' | 'explode' | 'cutaway' | 'lowDetail' | 'autoRotate' | 'onCamera' | 'onExplode' | 'onCutaway' | 'onLowDetail' | 'onResetCamera' | 'onToggleAutoRotate'>) {
   const { language, cameraMode, explode, cutaway, lowDetail, autoRotate, onCamera, onExplode, onCutaway, onLowDetail, onResetCamera, onToggleAutoRotate } = props;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const modes: { mode: CameraMode; label: string; Icon: typeof Building2 }[] = [
     { mode: 'overview', label: language === 'hi' ? '3D आइसोमेट्रिक' : '3D Isometric', Icon: Building2 },
     { mode: 'topdown', label: language === 'hi' ? 'ऊपर से दृश्य' : '2D Top', Icon: Crosshair },
@@ -64,22 +69,35 @@ export function CameraControls(props: Pick<ViewControlsProps, 'language' | 'came
   ];
   return (
     <section className="camera-dock" aria-label={tr('viewHeading', language)}>
-      <div className="camera-presets">
-        {modes.map(({ mode, label, Icon }) => (
-          <button key={mode} type="button" className={`camera-preset${cameraMode === mode ? ' is-on' : ''}`} aria-label={label} title={label} aria-pressed={cameraMode === mode} onClick={() => onCamera(mode)}>
-            <Icon size={17} aria-hidden="true" />
+      <div className="camera-presets camera-tool-rail">
+        <button type="button" className="tool-more-button" aria-label={language === 'hi' ? 'और उपकरण' : 'More tools'} title={language === 'hi' ? 'और उपकरण' : 'More tools'} aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}>
+          <MoreHorizontal size={18} aria-hidden="true" />
+        </button>
+        <div className={`camera-tool-details${moreOpen ? ' is-open' : ''}`}>
+        <div className="tool-section" aria-label={language === 'hi' ? 'दृश्य' : 'View'}>
+          <span className="tool-section-label">{language === 'hi' ? 'दृश्य' : 'View'}</span>
+          {modes.map(({ mode, label, Icon }) => (
+            <button key={mode} type="button" className={`camera-preset${cameraMode === mode ? ' is-on' : ''}`} aria-label={label} title={label} data-tooltip={label} aria-pressed={cameraMode === mode} onClick={() => onCamera(mode)}>
+              <Icon size={17} aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+        <div className="tool-section" aria-label={language === 'hi' ? 'कैमरा' : 'Camera'}>
+          <span className="tool-section-label">{language === 'hi' ? 'कैमरा' : 'Camera'}</span>
+          <button type="button" className={`camera-preset${autoRotate ? ' is-on' : ''}`} aria-label={language === 'hi' ? 'ऑटो रोटेशन' : 'Auto rotate'} title={language === 'hi' ? 'ऑटो रोटेशन' : 'Auto rotate'} data-tooltip={language === 'hi' ? 'ऑटो रोटेशन' : 'Auto rotate'} aria-pressed={autoRotate} onClick={onToggleAutoRotate}>
+            <RotateCw size={17} aria-hidden="true" />
           </button>
-        ))}
-        <span className="dock-divider" aria-hidden="true" />
-        <button type="button" className={`camera-preset${autoRotate ? ' is-on' : ''}`} aria-label={language === 'hi' ? 'ऑटो रोटेशन' : 'Auto-Rotate'} title={language === 'hi' ? 'ऑटो रोटेशन' : 'Auto-Rotate'} aria-pressed={autoRotate} onClick={onToggleAutoRotate}>
-          <RotateCw size={17} aria-hidden="true" />
-        </button>
-        <button type="button" className="camera-preset" aria-label={tr('resetCamera', language)} title={tr('resetCamera', language)} onClick={onResetCamera}>
-          <RotateCcw size={17} aria-hidden="true" />
-        </button>
-        <button type="button" className={`camera-preset${settingsOpen ? ' is-on' : ''}`} aria-label={language === 'hi' ? 'दृश्य सेटिंग' : 'Scene settings'} title={language === 'hi' ? 'दृश्य सेटिंग' : 'Scene settings'} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>
-          <SlidersHorizontal size={17} aria-hidden="true" />
-        </button>
+          <button type="button" className="camera-preset" aria-label={tr('resetCamera', language)} title={tr('resetCamera', language)} data-tooltip={tr('resetCamera', language)} onClick={onResetCamera}>
+            <RotateCcw size={17} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="tool-section tool-section-settings" aria-label={language === 'hi' ? 'सेटिंग' : 'Settings'}>
+          <span className="tool-section-label">{language === 'hi' ? 'सेटिंग' : 'Settings'}</span>
+          <button type="button" className={`camera-preset${settingsOpen ? ' is-on' : ''}`} aria-label={language === 'hi' ? 'दृश्य सेटिंग' : 'Scene settings'} title={language === 'hi' ? 'दृश्य सेटिंग' : 'Scene settings'} data-tooltip={language === 'hi' ? 'दृश्य सेटिंग' : 'Scene settings'} aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>
+            <SlidersHorizontal size={17} aria-hidden="true" />
+          </button>
+        </div>
+        </div>
       </div>
       {settingsOpen ? <div className="camera-settings">
         <label className="slider"><span>{tr('explode', language)}</span><input type="range" min={0} max={100} value={Math.round(explode * 100)} onChange={(e) => onExplode(Number(e.target.value) / 100)} aria-valuetext={`${Math.round(explode * 100)}%`} /></label>

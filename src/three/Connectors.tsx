@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Edges, Html } from '@react-three/drei';
 import { BoxGeometry, BufferGeometry, Group } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CORE, LIFT_B_POINT, LIFT_POINT, STAIR_POINT } from '../data/layout';
+import { CORE, LIFT_POINT } from '../data/layout';
 import { LEVELS } from '../data/floors';
 import { levelToY, STAIR_TREADS, WALL_HEIGHT } from './levels';
 import type { SceneMaterials } from './palette';
@@ -13,10 +12,43 @@ import { useOwnedGeometry } from './useGeometry';
 const CAR_HEIGHT = 2.9;
 
 /** A box spanning the x/z rectangle `rect`, from `bottom` to `top` in world y. */
-function shaftBox(rect: { x0: number; x1: number; z0: number; z1: number }, bottom: number, top: number): BoxGeometry {
-  const geometry = new BoxGeometry(rect.x1 - rect.x0, top - bottom, rect.z1 - rect.z0);
-  geometry.translate((rect.x0 + rect.x1) / 2, (top + bottom) / 2, (rect.z0 + rect.z1) / 2);
+function shaftBox(rect: { x0: number; x1: number; z0: number; z1: number }, bottom: number, top: number): BufferGeometry {
+  const width = rect.x1 - rect.x0;
+  const height = top - bottom;
+  const depth = rect.z1 - rect.z0;
+  const geometry = new BoxGeometry(width, height, depth);
+  geometry.translate((rect.x0 + rect.x1) / 2, (bottom + top) / 2, (rect.z0 + rect.z1) / 2);
   return geometry;
+}
+
+/** A box spanning the x/z rectangle `rect`, from `bottom` to `top` in world y. */
+function shaftFrame(rect: { x0: number; x1: number; z0: number; z1: number }, bottom: number, top: number, floorYs: readonly number[]): BufferGeometry {
+  const thickness = 0.12;
+  const width = rect.x1 - rect.x0;
+  const depth = rect.z1 - rect.z0;
+  const parts: BufferGeometry[] = [];
+  const addBar = (w: number, h: number, d: number, x: number, y: number, z: number): void => {
+    const geometry = new BoxGeometry(w, h, d);
+    geometry.translate(x, y, z);
+    parts.push(geometry);
+  };
+  const middleY = (bottom + top) / 2;
+  const height = top - bottom;
+  for (const x of [rect.x0 + thickness / 2, rect.x1 - thickness / 2]) {
+    for (const z of [rect.z0 + thickness / 2, rect.z1 - thickness / 2]) {
+      addBar(thickness, height, thickness, x, middleY, z);
+    }
+  }
+  const ringYs = [...new Set([bottom + thickness / 2, ...floorYs.filter((y) => y > bottom && y < top), top - thickness / 2])];
+  for (const y of ringYs) {
+    addBar(width, thickness, thickness, (rect.x0 + rect.x1) / 2, y, rect.z0 + thickness / 2);
+    addBar(width, thickness, thickness, (rect.x0 + rect.x1) / 2, y, rect.z1 - thickness / 2);
+    addBar(thickness, thickness, depth, rect.x0 + thickness / 2, y, (rect.z0 + rect.z1) / 2);
+    addBar(thickness, thickness, depth, rect.x1 - thickness / 2, y, (rect.z0 + rect.z1) / 2);
+  }
+  const merged = mergeGeometries(parts, false);
+  parts.forEach((part) => part.dispose());
+  return merged ?? new BufferGeometry();
 }
 
 /** Each flight is a stepped run of treads climbing from the bottom of the stairwell to the top. */
@@ -48,14 +80,16 @@ export interface ConnectorsProps {
   explode: number;
   materials: SceneMaterials;
   bus: SceneBus;
-  labels: boolean;
+  liftAActive: boolean;
+  liftBActive: boolean;
 }
 
 /** Lift shaft with its moving car, stairwell with treads, and one label per vertical shaft. */
-export function Connectors({ explode, materials, bus, labels }: ConnectorsProps) {
-  const liftShaft = useOwnedGeometry(() => shaftBox(CORE.lift, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT), [explode]);
-  const liftBShaft = useOwnedGeometry(() => shaftBox(CORE.liftB, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT), [explode]);
-  const stairShaft = useOwnedGeometry(() => shaftBox(CORE.stair, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT), [explode]);
+export function Connectors({ explode, materials, bus, liftAActive, liftBActive }: ConnectorsProps) {
+  const floorYs = LEVELS.map((level) => levelToY(level, explode));
+  const liftShaft = useOwnedGeometry(() => shaftFrame(CORE.lift, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT, floorYs), [explode]);
+  const liftBShaft = useOwnedGeometry(() => shaftFrame(CORE.liftB, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT, floorYs), [explode]);
+  const stairShaft = useOwnedGeometry(() => shaftFrame(CORE.stair, levelToY(0, explode) - 0.1, levelToY(3, explode) + WALL_HEIGHT, floorYs), [explode]);
   const flights = useMemo(() => buildFlights(explode), [explode]);
   useEffect(() => () => flights.forEach((g) => g.dispose()), [flights]);
 
@@ -78,20 +112,12 @@ export function Connectors({ explode, materials, bus, labels }: ConnectorsProps)
 
   return (
     <group>
-      <mesh geometry={liftShaft} material={materials.shaft} renderOrder={1}>
-        <Edges color="#5f93d3" />
-      </mesh>
-      <mesh geometry={liftBShaft} material={materials.shaft} renderOrder={1}>
-        <Edges color="#5f93d3" />
-      </mesh>
-      <mesh geometry={stairShaft} material={materials.shaft} renderOrder={1}>
-        <Edges color="#8aa7c9" />
-      </mesh>
+      <mesh geometry={liftShaft} material={liftAActive ? materials.shaftActive : materials.shaft} renderOrder={1} />
+      <mesh geometry={liftBShaft} material={liftBActive ? materials.shaftActive : materials.shaft} renderOrder={1} />
+      <mesh geometry={stairShaft} material={materials.shaft} renderOrder={1} />
 
       <group ref={carRef} position={[LIFT_POINT[0], 0.1, LIFT_POINT[1]]}>
-        <mesh geometry={carGeometry} material={materials.car} castShadow renderOrder={5}>
-          <Edges color="#67e8f9" threshold={12} />
-        </mesh>
+        <mesh geometry={carGeometry} material={materials.car} castShadow renderOrder={5} />
         <mesh position={[0, CAR_HEIGHT / 2, 0]}>
           <boxGeometry args={[CORE.lift.x1 - CORE.lift.x0 - 0.69, CAR_HEIGHT - 0.24, CORE.lift.z1 - CORE.lift.z0 - 0.69]} />
           <meshBasicMaterial color="#dbeafe" transparent opacity={0.12} side={2} depthWrite={false} />
@@ -107,7 +133,6 @@ export function Connectors({ explode, materials, bus, labels }: ConnectorsProps)
       <group position={[0, levelToY(2, explode) + 0.08, 0]}>
         <mesh material={materials.skybridge}>
           <boxGeometry args={[16, 0.18, 3.2]} />
-          <Edges color="#38bdf8" />
         </mesh>
         {[-1.48, 1.48].map((z) => <mesh key={z} position={[0, 0.62, z]} material={materials.doorFrame}>
           <boxGeometry args={[16, 1.05, 0.08]} />
@@ -116,7 +141,6 @@ export function Connectors({ explode, materials, bus, labels }: ConnectorsProps)
       <group position={[0, levelToY(2, explode) + 0.08, 12]}>
         <mesh material={materials.skybridge}>
           <boxGeometry args={[68, 0.18, 3.2]} />
-          <Edges color="#38bdf8" />
         </mesh>
         {[-1.48, 1.48].map((z) => <mesh key={z} position={[0, 0.62, z]} material={materials.doorFrame}>
           <boxGeometry args={[68, 1.05, 0.08]} />
@@ -127,19 +151,6 @@ export function Connectors({ explode, materials, bus, labels }: ConnectorsProps)
         <mesh key={`flight-${i}`} geometry={geometry} material={materials.stair} castShadow receiveShadow />
       ))}
 
-      {labels
-        ? <>
-            <Html position={[LIFT_POINT[0], levelToY(3, explode) + WALL_HEIGHT + 0.5, LIFT_POINT[1] + 2.4]} center zIndexRange={[12, 0]}>
-              <div className="room-label is-key connector-label">Lift A</div>
-            </Html>
-            <Html position={[LIFT_B_POINT[0], levelToY(3, explode) + WALL_HEIGHT + 0.5, LIFT_B_POINT[1] + 2.4]} center zIndexRange={[12, 0]}>
-              <div className="room-label is-key connector-label">Lift B</div>
-            </Html>
-            <Html position={[STAIR_POINT[0] + 0.6, levelToY(3, explode) + WALL_HEIGHT + 0.5, STAIR_POINT[1] + 2.4]} center zIndexRange={[12, 0]}>
-              <div className="room-label is-key connector-label">Stairs</div>
-            </Html>
-          </>
-        : null}
     </group>
   );
 }

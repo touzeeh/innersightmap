@@ -41,7 +41,10 @@ export function describeRecognitionError(code: string): Localised {
     case 'audio-capture':
       return { en: 'No microphone was found. Type your destination instead.', hi: 'कोई माइक्रोफ़ोन नहीं मिला। गंतव्य टाइप करें।' };
     case 'network':
-      return { en: 'The browser speech service could not be reached. Type your destination instead.', hi: 'ब्राउज़र की वाक् सेवा तक नहीं पहुँच सके। गंतव्य टाइप करें।' };
+      return {
+        en: 'Brave could not reach its online speech-recognition service. Try this page in Google Chrome or Microsoft Edge for Speak, or type your destination here.',
+        hi: 'Brave की ऑनलाइन वाक् पहचान सेवा तक नहीं पहुँच सकी। Speak के लिए यह पेज Google Chrome या Microsoft Edge में खोलें, या गंतव्य यहाँ टाइप करें।',
+      };
     case 'language-not-supported':
       return { en: 'This browser does not support speech recognition in the selected language.', hi: 'इस ब्राउज़र में चुनी गई भाषा के लिए वाक् पहचान उपलब्ध नहीं है।' };
     case 'aborted':
